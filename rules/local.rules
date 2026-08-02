@@ -1,0 +1,89 @@
+# ============================================================================
+# local.rules - Custom Suricata Signatures (Tuned)
+# Project: SURICATA-IDS-Rule-Tuning
+# ============================================================================
+# Cada regla incluye en el comentario:
+#   - Objetivo de detección
+#   - Justificación del threshold elegido
+#   - Falsos positivos conocidos (documentar honestamente ayuda al triage)
+# ============================================================================
+
+# ----------------------------------------------------------------------------
+# 1. ICMP Network Discovery Detection
+# ----------------------------------------------------------------------------
+# Objetivo: detectar barridos de ping (ICMP Echo Request) usados en
+# reconocimiento de red (MITRE ATT&CK T1595 - Active Scanning).
+#
+# itype:8 aisla el Echo Request saliente, evitando duplicar la alerta con
+# el Echo Reply de vuelta (problema original documentado en el README).
+#
+# type limit es correcto aquí: no buscamos "volumen" de pings (un solo ping
+# ya es indicativo de descubrimiento), solo evitar alertar 2 veces por el
+# mismo evento request/reply.
+#
+# classtype corregido: not-suspicious contradecía el msg "[IDS ALERT]".
+# Se usa attempted-recon, coherente con el resto del set y con Priority 2.
+#
+# FP conocidos: monitoreo de uptime/health-checks legítimos vía ICMP.
+alert icmp any any -> any any (msg:"[IDS ALERT] ICMP Network Discovery Detected"; itype:8; threshold: type limit, track by_src, count 1, seconds 30; classtype:attempted-recon; reference:url,attack.mitre.org/techniques/T1595; sid:1000001; rev:5;)
+
+# ----------------------------------------------------------------------------
+# 2. TCP SYN Port Scan Detection
+# ----------------------------------------------------------------------------
+# Objetivo: detectar escaneo de puertos (MITRE ATT&CK T1046 - Network
+# Service Discovery), NO conexiones TCP individuales legítimas.
+#
+# CORRECCION CRITICA respecto a la version anterior:
+#   - flags:S  -> flags:S,12   (fija exactamente que flags deben estar
+#     presentes/ausentes, evita matches ambiguos)
+#   - type limit, count 1  ->  type threshold, count 15, seconds 5
+#     Un solo SYN (ej. abrir una pestaña web) YA NO dispara la alerta.
+#     Se requiere volumen (15 SYN en 5s desde el mismo origen) para
+#     considerarse comportamiento de escaneo real.
+#   - Se agrega flow:to_server para evaluar solo el sentido cliente->servidor.
+#
+# Puerto 2376 excluido: API TLS del daemon Docker, genera SYN de gestion
+# interna del propio entorno de laboratorio (no es trafico de ataque).
+#
+# IMPORTANTE: ajustar count/seconds contra tu propio baseline de trafico
+# "normal" antes de llevar esto a un entorno con mas hosts.
+#
+# FP conocidos: escaneres de vulnerabilidades autorizados (Nessus/OpenVAS),
+# balanceadores de carga con health-checks TCP muy frecuentes.
+alert tcp any any -> any !2376 (msg:"[IDS ALERT] Possible TCP SYN Port Scan"; flow:to_server; flags:S,12; threshold: type threshold, track by_src, count 15, seconds 5; classtype:network-scan; reference:url,attack.mitre.org/techniques/T1046; sid:1000002; rev:6;)
+
+# ----------------------------------------------------------------------------
+# 3. SQL Injection Detection - UNION-based
+# ----------------------------------------------------------------------------
+# Objetivo: detectar intentos de SQLi tipo UNION SELECT en la URI HTTP
+# (MITRE ATT&CK T1190 - Exploit Public-Facing Application).
+#
+# CORRECCION CRITICA respecto a la version anterior:
+#   - Se restauro el threshold (se habia perdido al migrar a alert http),
+#     necesario para evitar duplicados cuando el ataque viene de una
+#     herramienta automatizada (sqlmap, Burp Intruder).
+#   - Se exige un SEGUNDO content ("SELECT") ademas de "UNION", con
+#     distance:0 para que aparezcan cercanos. Una sola palabra ("UNION")
+#     genera falsos positivos con texto legitimo (ej. "European Union").
+#   - http.uri (sticky buffer, sintaxis moderna Suricata 6+) en vez del
+#     modificador legacy http_uri.
+#
+# FP conocidos: paginas que legitimamente incluyan las palabras "union"
+# y "select" cercanas en un parametro de texto libre (raro, pero posible
+# en CMS o buscadores internos).
+alert http any any -> any any (msg:"[IDS ALERT] SQL Injection Attempt - UNION SELECT"; flow:to_server,established; http.uri; content:"UNION"; nocase; content:"SELECT"; nocase; distance:0; threshold: type threshold, track by_src, count 1, seconds 10; classtype:web-application-attack; reference:url,owasp.org/www-community/attacks/SQL_Injection; sid:1000003; rev:4;)
+
+# ----------------------------------------------------------------------------
+# 4. SQL Injection Detection - Tautology (' OR '1'='1)
+# ----------------------------------------------------------------------------
+# Regla adicional sugerida: cubre el patron clasico de bypass de
+# autenticacion, distinto del patron UNION de la regla 1000003.
+# SID propio para poder afinar/desactivar cada patron de forma independiente.
+alert http any any -> any any (msg:"[IDS ALERT] SQL Injection Attempt - Tautology Bypass"; flow:to_server,established; http.uri; content:"OR"; nocase; content:"="; distance:0; pcre:"/(\%27|\')\s*OR\s*(\%27|\')?1(\%27|\')?\s*=\s*(\%27|\')?1/i"; threshold: type threshold, track by_src, count 1, seconds 10; classtype:web-application-attack; reference:url,owasp.org/www-community/attacks/SQL_Injection; sid:1000004; rev:1;)
+
+# ----------------------------------------------------------------------------
+# 5. SQL Injection Detection - Time-based Blind (SLEEP/BENCHMARK)
+# ----------------------------------------------------------------------------
+# Regla adicional sugerida: cubre tecnicas de SQLi ciego basado en tiempo,
+# no detectables por las firmas anteriores (no usan UNION ni tautologias).
+alert http any any -> any any (msg:"[IDS ALERT] SQL Injection Attempt - Time-based Blind"; flow:to_server,established; http.uri; pcre:"/(SLEEP\s*\(|BENCHMARK\s*\()/i"; threshold: type threshold, track by_src, count 1, seconds 10; classtype:web-application-attack; reference:url,owasp.org/www-community/attacks/Blind_SQL_Injection; sid:1000005; rev:1;)
