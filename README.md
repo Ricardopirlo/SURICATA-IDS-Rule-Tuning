@@ -102,7 +102,8 @@ suricata-ids-rule-tuning/
 ├── test_rules.py             # Automated attack simulation script
 └── README.md                 # Project documentation
 ```
-
+> ⚠️ **Architecture Note (`logs/` Directory):**  
+> The `logs/` directory is intentionally excluded from version control via `.gitignore`. Log files (`fast.log` and `eve.json`) are dynamically generated at runtime by Suricata. Excluding them prevents Git history pollution, avoids merge conflicts, and adheres to security best practices by preventing sensitive network operational telemetry from being exposed in the public repository.
 
 ## 🧠 Key Technical Takeaways
 
