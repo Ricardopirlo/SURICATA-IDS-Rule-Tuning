@@ -1,0 +1,75 @@
+%YAML 1.1
+---
+# ============================================================================
+# suricata.yaml (minimo) - SURICATA-IDS-Rule-Tuning lab
+# ============================================================================
+# Este archivo NO reemplaza la configuracion completa de referencia de
+# OISF. Es un subconjunto minimo, pensado para:
+#   1. Ser versionado en el repo (a diferencia de la config por defecto
+#      de la imagen, que es invisible desde fuera del contenedor).
+#   2. Habilitar explicitamente eve.json (necesario para el test suite
+#      automatizado, que verifica alertas por signature_id).
+#   3. Definir HOME_NET de forma explicita en vez de depender del default.
+# ============================================================================
+
+vars:
+  address-groups:
+    # Ajustar segun el rango real que use la VM de Docker Desktop
+    # (ver nota de arquitectura en el README sobre network_mode: host).
+    HOME_NET: "[192.168.65.0/24,10.0.0.0/8,172.16.0.0/12]"
+    EXTERNAL_NET: "!$HOME_NET"
+
+default-rule-path: /var/lib/suricata/rules
+rule-files:
+  - local.rules
+
+af-packet:
+  - interface: eth0
+    threads: auto
+    cluster-id: 99
+    cluster-type: cluster_flow
+    defrag: yes
+    tpacket-v3: yes
+  - interface: br-7b0b10115bbb
+    threads: auto
+    cluster-id: 98
+    cluster-type: cluster_flow
+    defrag: yes
+    tpacket-v3: yes
+
+outputs:
+  # eve.json: log estructurado JSON, necesario para automatizar
+  # verificaciones (test_rules.py) y para ingestion en SIEM (ELK/Splunk).
+  - eve-log:
+      enabled: yes
+      filetype: regular
+      filename: eve.json
+      types:
+        - alert:
+            tagged-packets: yes
+        - http:
+            extended: yes
+        - dns
+        - flow
+        - stats:
+            threshold: 10
+
+  # fast.log: se mantiene para inspeccion rapida en consola/PowerShell,
+  # tal como se documenta en el README original.
+  - fast:
+      enabled: yes
+      filename: fast.log
+      append: yes
+
+logging:
+  default-log-level: info
+  outputs:
+    - console:
+        enabled: yes
+    - file:
+        enabled: yes
+        filename: suricata.log
+
+stats:
+  enabled: yes
+  interval: 30
