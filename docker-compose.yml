@@ -1,16 +1,67 @@
-version: '3.8'
 
 services:
   suricata:
-    image: jasonish/suricata:latest
+    # FIXED: pinned image version instead of :latest for reproducibility.
+    # Check your installed version with:
+    # docker exec suricata_ids suricata -V
+    image: jasonish/suricata:7.0.6
     container_name: suricata_ids
     network_mode: "host"
     cap_add:
       - NET_ADMIN
       - SYS_NICE
       - NET_RAW
-    command: -i eth0 -S /var/lib/suricata/rules/local.rules
+
+    # FIXED: explicitly points to the project's suricata.yaml
+    # instead of relying on the image's default configuration
+    # (which is hidden from anyone reviewing the project outside
+    # the container).
+    command: -c /etc/suricata/suricata.yaml --af-packet -S /var/lib/suricata/rules/local.rules
+
     volumes:
-      - ./rules/local.rules:/var/lib/suricata/rules/local.rules
+      # FIXED: mounts the entire rules/ directory instead of a
+      # single file. This avoids the known Docker Desktop/Windows
+      # issue where a single-file bind mount may be created as an
+      # empty directory if the file does not exist before the first
+      # "docker compose up".
+      - ./rules:/var/lib/suricata/rules
+      - ./config/suricata.yaml:/etc/suricata/suricata.yaml
       - ./logs:/var/log/suricata
-    restart: always
+
+    # FIXED: "always" may cause silent crash-restart loops.
+    restart: unless-stopped
+
+    # ADDED: verifies that the Suricata process is still running.
+    healthcheck:
+      test: ["CMD", "pgrep", "suricata"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # ADDED: dedicated "victim" container.
+  # Replaces 1.1.1.1 / example.com as the target for SQL injection
+  # and port scanning tests.
+  #
+  # Reasons:
+  #   1. Ethical/legal: avoids scanning or sending attack payloads
+  #      to third-party infrastructure that you do not control.
+  #
+  #   2. Reproducibility: tests do not depend on internet
+  #      connectivity or external servers behaving consistently.
+  victim:
+    image: nginx:alpine
+    container_name: lab_victim
+    networks:
+      - lab_net
+
+    # Note: to properly validate the SQL Injection rule, you need
+    # an endpoint that actually processes or reflects the request
+    # parameters. Nginx only serves static content.
+    #
+    # Replace this image with a deliberately vulnerable lab
+    # application such as DVWA or OWASP Juice Shop if you want
+    # to test full HTTP request parsing.
+
+networks:
+  lab_net:
+    driver: bridge
