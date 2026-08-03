@@ -210,3 +210,11 @@ This project is licensed under the MIT License — see the `LICENSE` file for de
 ### Legal & educational disclaimer
 
 **Notice:** this tool is designed exclusively for authorized network auditing and security hardening assessment. Ensure you have explicit authorization before running audit operations against active enterprise infrastructure. All tests in this lab run against a self-owned, isolated container (`victim`), never against third-party infrastructure.
+
+---
+
+## 📚 Part of a series
+
+📍 **Episode 1 of 7** — [The Cybersecurity Portfolio Series](https://github.com/Ricardopirlo/Cybersecurity-Portfolio-Series)
+
+A structured, hands-on journey through core SOC/security engineering skills. See the full series index for all episodes, repos, and write-ups.
