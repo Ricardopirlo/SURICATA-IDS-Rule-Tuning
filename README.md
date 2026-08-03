@@ -18,11 +18,7 @@ This project simulates a controlled, containerized environment where network att
 
 The lab runs in an isolated Docker environment, on a native Windows host with Docker Desktop.
 
-```
-<p align="center">
-  <img src="assets/architecture.svg" alt="Suricata lab architecture: your PC contains the Docker Desktop VM, with attacker containers, eth0, the lab_net bridge and victim container, the Suricata engine listening on both interfaces, log outputs, and the host-side test script" width="600">
-</p>
-```
+![Suricata lab architecture diagram](assets/architecture.svg)
 
 ### ⚠️ Critical architecture note: `network_mode: host` on Docker Desktop
 
