@@ -14,6 +14,10 @@ This project simulates a controlled, containerized environment where network att
 
 ---
 
+## 🏗️ Overview
+
+![Suricata lab architecture diagram](assets/IDS_Rule_Tuning_Lab_Infographic.png)
+
 ## 🏗️ Architecture & components
 
 The lab runs in an isolated Docker environment, on a native Windows host with Docker Desktop.
